@@ -28,16 +28,24 @@ export default function Signup() {
       setError('Full name is required');
       return false;
     }
-    if (!formData.email.includes('@')) {
-      setError('Please enter a valid email');
+    if (formData.name.trim().length < 2) {
+      setError('Name must be at least 2 characters');
       return false;
     }
-    if (!formData.phone.match(/^\d{10}$/)) {
-      setError('Please enter a valid 10-digit phone number');
+    if (!formData.email.includes('@') || !formData.email.includes('.')) {
+      setError('Please enter a valid email address');
       return false;
     }
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters');
+    if (!formData.phone.trim()) {
+      setError('Phone number is required');
+      return false;
+    }
+    if (!formData.phone.match(/^\d{10}$/) && !formData.phone.match(/^\+\d{10,}/)) {
+      setError('Please enter a valid 10-digit phone number or international format');
+      return false;
+    }
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters');
       return false;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -67,9 +75,9 @@ export default function Signup() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim(),
           password: formData.password
         })
       });
@@ -77,7 +85,7 @@ export default function Signup() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || 'Signup failed');
+        setError(data.error || 'Signup failed. Please try again.');
         return;
       }
 
@@ -87,7 +95,7 @@ export default function Signup() {
       }, 2000);
 
     } catch (err) {
-      setError('Connection error. Please try again.');
+      setError('Connection error. Make sure the backend server is running on port 5000.');
       console.error('Signup error:', err);
     } finally {
       setLoading(false);

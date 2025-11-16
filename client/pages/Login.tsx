@@ -16,26 +16,44 @@ export default function Login() {
     setError('');
     setLoading(true);
 
+    // Basic validation
+    if (!email.trim()) {
+      setError('Email is required');
+      setLoading(false);
+      return;
+    }
+
+    if (!password.trim()) {
+      setError('Password is required');
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch('http://127.0.0.1:5000/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: email.trim(), password })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || 'Login failed');
+        setError(data.error || 'Login failed. Please check your credentials.');
         return;
       }
 
       // Store user info in localStorage
       localStorage.setItem('user', JSON.stringify({
-        id: data.user_id,
-        name: data.name,
-        email: data.email
+        id: data.user?.id || 1,
+        name: data.user?.name || 'User',
+        email: data.user?.email || email,
+        phone: data.user?.phone || ''
       }));
+
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+      }
 
       if (rememberMe) {
         localStorage.setItem('rememberMe', 'true');
@@ -43,7 +61,7 @@ export default function Login() {
 
       navigate('/dashboard');
     } catch (err) {
-      setError('Connection error. Please try again.');
+      setError('Connection error. Make sure the backend server is running on port 5000.');
       console.error('Login error:', err);
     } finally {
       setLoading(false);

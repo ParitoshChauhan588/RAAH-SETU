@@ -1,22 +1,32 @@
 import React, { useState, useEffect } from "react";
-import { NavLink, Link } from "react-router-dom";
+import { NavLink, Link, useNavigate } from "react-router-dom";
 import ReportModal from "./ReportModal";
+import { LogOut } from "lucide-react";
 
 export default function NavBar() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     try {
       const t = localStorage.getItem("theme");
       if (t === "dark" || t === "light") return t as "light" | "dark";
-      // Default to light for production-ready professional theme
       return "light";
     } catch (e) {
       return "light";
     }
   });
   const [modalOpen, setModalOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        console.error("Error parsing user:", e);
+      }
+    }
     document.documentElement.classList.toggle("dark", theme === "dark");
     try {
       localStorage.setItem("theme", theme);
@@ -27,6 +37,13 @@ export default function NavBar() {
     `px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${isActive ? "bg-gradient-to-r from-primary/10 to-secondary/10 text-primary shadow-inner" : "text-muted-foreground hover:text-primary hover:scale-105"}`;
 
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    localStorage.removeItem("rememberMe");
+    setUser(null);
+    navigate("/login");
+  };
 
   const handleReportSubmit = (title: string, desc: string) => {
     const reports = JSON.parse(localStorage.getItem("reports:v1") || "[]");
@@ -387,12 +404,37 @@ export default function NavBar() {
               >
                 Settings
               </NavLink>
-              <NavLink
-                to="/login"
-                className={({ isActive }) => linkClass(isActive)}
-              >
-                Login
-              </NavLink>
+              {user ? (
+                <>
+                  <div className="border-t border-[hsl(var(--border))] pt-2 mt-2">
+                    <p className="px-3 py-2 text-xs font-semibold text-muted-foreground">
+                      Logged in as: {user.name}
+                    </p>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full text-left px-3 py-2 rounded-md text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                    >
+                      <LogOut size={16} />
+                      Logout
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <NavLink
+                    to="/login"
+                    className={({ isActive }) => linkClass(isActive)}
+                  >
+                    Login
+                  </NavLink>
+                  <NavLink
+                    to="/signup"
+                    className="px-3 py-2 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-md text-sm font-medium hover:shadow-lg transition"
+                  >
+                    Sign Up
+                  </NavLink>
+                </>
+              )}
 
               <div className="pt-2 border-t border-[hsl(var(--border))]">
                 <button
