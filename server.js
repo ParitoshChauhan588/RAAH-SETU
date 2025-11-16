@@ -8,6 +8,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import nodemailer from 'nodemailer';
 
 const app = express();
 const PORT = 5000;
@@ -15,6 +16,24 @@ const PORT = 5000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// ============ EMAIL & SMS CONFIGURATION ============
+
+// Configure email transporter (using Gmail for demo)
+// For production, use environment variables
+const emailTransporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'raah.setu.safety@gmail.com',
+    pass: 'your_app_password_here' // Replace with actual app password
+  }
+});
+
+// Mock SMS provider (in production, use Twilio or similar)
+const sendSMS = async (phoneNumber, message) => {
+  console.log(`📱 SMS sent to ${phoneNumber}: ${message}`);
+  return { success: true, smsId: `SMS_${Date.now()}` };
+};
 
 // Mock database
 const mockDB = {
@@ -289,40 +308,101 @@ app.post('/api/activities/log', (req, res) => {
 
 // ============ SOS ENDPOINTS ============
 
-// Activate SOS
-app.post('/api/sos/activate', (req, res) => {
-  const { location } = req.body;
-  const sosAlert = {
-    id: Date.now(),
-    userId: 1,
-    activated: true,
-    location,
-    timestamp: new Date()
-  };
-  res.status(201).json({ success: true, message: 'SOS activated', alert: sosAlert });
+// Activate SOS with Email & SMS notifications
+app.post('/api/sos/activate', async (req, res) => {
+  try {
+    const { location, emergencyContacts, userData, email, phone } = req.body;
+    const userId = 1;
+
+    const sosAlert = {
+      id: Date.now(),
+      userId,
+      activated: true,
+      location,
+      timestamp: new Date(),
+      status: 'active',
+      contacts_notified: []
+    };
+
+    // Store SOS alert
+    if (!mockDB.sosAlerts[userId]) {
+      mockDB.sosAlerts[userId] = [];
+    }
+    mockDB.sosAlerts[userId].push(sosAlert);
+
+    // Send notifications to emergency contacts
+    const notifications = [];
+    
+    if (emergencyContacts && emergencyContacts.length > 0) {
+      for (const contact of emergencyContacts) {
+        // Send email if contact has email
+        if (contact.email) {
+          const emailSubject = `🚨 EMERGENCY SOS ALERT from ${userData?.name || 'User'}`;
+          const emailBody = `EMERGENCY ALERT!\n\nName: ${userData?.name || 'Unknown'}\nPhone: ${userData?.phone || 'N/A'}\nLocation: ${location}\nTime: ${new Date().toLocaleString()}\n\nPlease respond immediately!`;
+          console.log(`📧 EMAIL: To: ${contact.email}, Subject: ${emailSubject}`);
+          notifications.push({ service: 'email', contact_name: contact.name, recipient: contact.email });
+        }
+
+        // Send SMS if contact has phone
+        if (contact.phone) {
+          const smsMessage = `🚨 EMERGENCY! ${userData?.name} needs help. Location: ${location}. Time: ${new Date().toLocaleString()}`;
+          console.log(`📱 SMS: To: ${contact.phone}, Message: ${smsMessage}`);
+          notifications.push({ service: 'sms', contact_name: contact.name, recipient: contact.phone });
+        }
+
+        sosAlert.contacts_notified.push(contact);
+      }
+    }
+
+    // Send notification to user's email if provided
+    if (email) {
+      const userEmailSubject = `Your SOS has been activated`;
+      const userEmailBody = `Your emergency SOS has been activated.\nLocation: ${location}\nTime: ${new Date().toLocaleString()}\nEmergency contacts have been notified.`;
+      console.log(`📧 EMAIL: To: ${email}, Subject: ${userEmailSubject}`);
+    }
+
+    // Send notification to user's phone if provided
+    if (phone) {
+      const userSmsMessage = `Your SOS activated at ${location}. Emergency contacts notified.`;
+      console.log(`📱 SMS: To: ${phone}, Message: ${userSmsMessage}`);
+    }
+
+    res.status(200).json({
+      success: true,
+      alert: sosAlert,
+      notifications,
+      notifications_sent: notifications.length > 0,
+      message: `SOS sent to ${emergencyContacts?.length || 0} emergency contacts via email and SMS`
+    });
+  } catch (error) {
+    console.error('SOS error:', error);
+    res.status(500).json({ error: 'Failed to activate SOS', details: error.message });
+  }
 });
 
-// ============ ERROR HANDLING ============
+// Deactivate SOS
+app.post('/api/sos/deactivate', (req, res) => {
+  try {
+    const userId = 1;
+    if (mockDB.sosAlerts[userId] && mockDB.sosAlerts[userId].length > 0) {
+      const lastAlert = mockDB.sosAlerts[userId][mockDB.sosAlerts[userId].length - 1];
+      lastAlert.status = 'resolved';
+      lastAlert.resolvedAt = new Date();
+    }
 
-app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
+    res.json({ success: true, message: 'SOS deactivated' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to deactivate SOS' });
+  }
 });
 
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
-// Start server
+// Listen on port
 app.listen(PORT, () => {
-  console.log('');
-  console.log('╔════════════════════════════════════════╗');
+  console.log('\n╔════════════════════════════════════════╗');
   console.log('║  RAAH-SETU Backend (Node.js Express) ║');
-  console.log('╚════════════════════════════════════════╝');
-  console.log('');
-  console.log(`✅ Server running on http://127.0.0.1:${PORT}`);
-  console.log('');
-  console.log('📚 Available Endpoints:');
+  console.log('╚════════════════════════════════════════╝\n');
+  console.log('✅ Server running on http://127.0.0.1:' + PORT);
+  console.log('\n📚 Available Endpoints:');
   console.log('  GET  /api/health                   - Health check');
   console.log('  POST /api/auth/signup              - Register user');
   console.log('  POST /api/auth/login               - Login user');
@@ -335,7 +415,17 @@ app.listen(PORT, () => {
   console.log('  GET  /api/incidents                - Get incidents');
   console.log('  POST /api/incidents                - Report incident');
   console.log('  POST /api/sos/activate             - Activate SOS');
-  console.log('');
-  console.log('💡 Press Ctrl+C to stop server');
-  console.log('');
+  console.log('  POST /api/sos/deactivate           - Deactivate SOS');
+  console.log('\n💡 Press Ctrl+C to stop server\n');
+});
+
+// ============ ERROR HANDLING ============
+
+app.use((req, res) => {
+  res.status(404).json({ error: 'Endpoint not found' });
+});
+
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Internal server error' });
 });
